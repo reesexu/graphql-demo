@@ -6,21 +6,21 @@
       <button @click="getUser">获取用户信息</button>
       <button @click="getFollowers">获取该用户追随者</button>
       <button @click="getRepos">获取该用户仓库</button>
-      <button>使用graphQl获取以上三者的信息</button>
+      <button @click="getByGraphQl">使用graphQl获取以上三者的信息</button>
       <button @click="clear">clear</button>
     </div>
     <div v-if="user">
       <h2>Profile</h2>
-      <img class="avatar" :src="user.avatar_url" alt="avatar">
+      <img class="avatar" :src="user.avatar_url || user.avatarUrl" alt="avatar">
       <p>Id: {{user.id}}</p>
       <p>Name: {{user.name}}</p>
       <p>Location: {{user.location}}</p>
-      <p>Followers: {{user.followers}}</p>
+      <p>Followers: {{followersCount}}</p>
     </div>
     <div class="followers" v-if="followers">
       <h2>Followers</h2>
       <p v-for="(item, index) in followers" :key="index">
-        <img :src="item.avatar_url">
+        <img :src="item.avatar_url || item.avatarUrl">
         <span>{{item.login}}</span>
       </p>
     </div>
@@ -37,6 +37,8 @@
 <script>
 import HelloWorld from './components/HelloWorld.vue'
 import axios from 'axios'
+import { token } from '../sc'
+axios.defaults.headers.common['Authorization'] = `token ${token}`
 const restUrl = 'https://api.github.com'
 export default {
   name: 'app',
@@ -45,7 +47,8 @@ export default {
       username: 'yyx990803',
       user: null,
       followers: null,
-      repos: null
+      repos: null,
+      followersCount: 0
     }
   },
   components: {
@@ -56,6 +59,7 @@ export default {
     async getUser() {
       const { data } = await axios.get(`${restUrl}/users/${this.username}`)
       this.user = data
+      this.followersCount = data.followers
     },
     // 获取追随者信息
     async getFollowers() {
@@ -70,6 +74,42 @@ export default {
         `${restUrl}/users/${this.username}/repos`
       )
       this.repos = data
+    },
+    // 通过graphQl获取以上三条信息
+    async getByGraphQl() {
+      const query = `
+      {
+        user(login: ${this.username}) {
+          id
+          name
+          location
+          avatarUrl
+          followers(first: 25) {
+            totalCount
+            nodes {
+              avatarUrl
+              login
+            }
+          }
+          repositories(first: 25) {
+            nodes {
+              id
+              name
+            }
+          }
+        }
+      }
+
+      `
+      const { data } = await axios.post('https://api.github.com/graphql', {
+        query
+      })
+      const { user } = data.data
+      const { followers, repositories } = user
+      this.user = user
+      this.followersCount = followers.totalCount
+      this.followers = followers.nodes
+      this.repos = repositories.nodes
     },
     clear() {
       this.user = null
@@ -96,7 +136,7 @@ export default {
 }
 
 .buttons {
-  margin: 40px 0;
+  margin: 20px 0;
 }
 
 button {
@@ -129,7 +169,7 @@ input {
 }
 
 p {
-  width: 500px;
+  width: 600px;
 }
 .followers {
   img {
